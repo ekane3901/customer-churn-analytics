@@ -2,11 +2,13 @@
 
 > An end-to-end machine learning system to predict customer churn and quantify revenue risk — built with Python, SQL, and AWS.
 
+![Dashboard Preview](reports/figures/14_revenue_risk_scatter.png)
+
 ---
 
 ## Project Overview
 
-Customer churn is one of the most costly problems in subscription-based businesses. This platform ingests multi-source customer data, engineers predictive features via SQL, trains classification models, and surfaces high-risk customers through an interactive dashboard — framed as a **revenue risk score**, not just a churn probability.
+Customer churn is one of the most costly problems in subscription-based businesses. This platform ingests multi-source customer data, engineers predictive features via SQL and Python, trains classification models, and surfaces high-risk customers through an interactive dashboard — framed as a **revenue risk score**, not just a churn probability.
 
 **Business question answered:** *Which customers are most likely to leave, and how much revenue is at risk if they do?*
 
@@ -41,7 +43,6 @@ Streamlit Dashboard (churn risk + revenue impact)
 |------------------|-------------------------------------|
 | Cloud Storage    | AWS S3                              |
 | Database         | AWS RDS (PostgreSQL)                |
-| Compute          | AWS EC2 / Local                     |
 | Data Processing  | Python, Pandas, NumPy               |
 | SQL Engineering  | PostgreSQL, SQLAlchemy              |
 | Modeling         | Scikit-learn, XGBoost               |
@@ -56,15 +57,9 @@ Streamlit Dashboard (churn risk + revenue impact)
 
 **Source:** [Telco Customer Churn — IBM Sample Dataset via Kaggle](https://www.kaggle.com/datasets/blastchar/telco-customer-churn)
 
-**Key fields:**
-- `customerID` — unique customer identifier
-- `tenure` — months as a customer
-- `MonthlyCharges`, `TotalCharges` — billing features
-- `Contract` — month-to-month, one year, two year
-- `InternetService`, `TechSupport`, `StreamingTV` — service features
-- `Churn` — target variable (Yes/No)
+**Size:** 7,043 customers × 21 features
 
-**Why this dataset:** Real-world structure, class imbalance (~27% churn rate), mix of categorical and numerical features — mirrors what you'd encounter in industry.
+**Key fields:** tenure, MonthlyCharges, TotalCharges, Contract, InternetService, PaymentMethod, and 15 other customer attributes.
 
 ---
 
@@ -74,74 +69,101 @@ Streamlit Dashboard (churn risk + revenue impact)
 customer-churn-analytics/
 │
 ├── data/
-│   ├── raw/                    # Original unmodified data (gitignored)
-│   └── processed/              # Cleaned, feature-engineered data (gitignored)
+│   ├── raw/                          # Original unmodified data (gitignored)
+│   └── processed/                    # Cleaned, feature-engineered data (gitignored)
 │
 ├── notebooks/
-│   ├── 01_eda.ipynb            # Exploratory data analysis
-│   ├── 02_feature_engineering.ipynb
-│   ├── 03_modeling.ipynb       # Model training and evaluation
-│   └── 04_risk_scoring.ipynb   # Revenue risk scoring logic
+│   ├── 01_eda.ipynb                  # Exploratory data analysis
+│   ├── 02_feature_engineering.ipynb  # Feature creation and encoding
+│   └── 03_modeling.ipynb             # Model training and evaluation
 │
 ├── src/
 │   ├── data/
-│   │   ├── ingest.py           # Load data from S3 / local
-│   │   └── preprocess.py       # Cleaning and type casting
+│   │   ├── ingest.py                 # Load data from S3 / local
+│   │   └── preprocess.py             # Cleaning and type casting
 │   ├── features/
-│   │   └── engineer.py         # Feature engineering functions
+│   │   └── engineer.py               # Feature engineering functions
 │   ├── models/
-│   │   ├── train.py            # Model training pipeline
-│   │   ├── evaluate.py         # Metrics and evaluation
-│   │   └── predict.py          # Inference / scoring
+│   │   ├── train.py                  # Model training pipeline
+│   │   ├── evaluate.py               # Metrics and evaluation
+│   │   └── predict.py                # Inference / scoring
 │   └── dashboard/
-│       └── app.py              # Streamlit dashboard
+│       └── app.py                    # Streamlit dashboard
 │
 ├── sql/
-│   ├── schema.sql              # RDS table definitions
-│   ├── feature_queries.sql     # SQL-based feature engineering
-│   └── risk_scores.sql         # Revenue risk aggregations
+│   ├── schema.sql                    # RDS table definitions
+│   ├── feature_queries.sql           # SQL-based feature engineering
+│   └── risk_scores.sql               # Revenue risk aggregations
 │
-├── models/                     # Saved model artifacts (gitignored)
-│
-├── reports/
-│   └── figures/                # EDA plots, model evaluation charts
-│
-├── config/
-│   └── config.yaml             # Project config (paths, model params)
-│
-├── tests/
-│   └── test_features.py        # Unit tests for feature engineering
-│
+├── models/                           # Saved model artifacts (gitignored)
+├── reports/figures/                  # EDA and evaluation charts
+├── config/config.yaml                # Project config
 ├── requirements.txt
-├── setup.py
-├── .env.example                # Template for environment variables
-├── .gitignore
 └── README.md
 ```
 
 ---
 
-## Modeling Approach
+## Key Findings from EDA
 
-### Models Trained
-1. **Logistic Regression** — interpretable baseline; explains which features drive churn
-2. **XGBoost Classifier** — primary model; handles non-linearity and feature interactions
+| Finding | Detail |
+|---|---|
+| Overall churn rate | **26.5%** — class imbalance means accuracy is a misleading metric |
+| Contract type | Month-to-month: **42.7% churn** vs 11.3% (one year) and 2.8% (two year) |
+| Tenure | Churned customers average **~18 months** vs ~38 months for retained |
+| Monthly charges | Churned customers pay **~$74/mo** vs ~$61/mo for retained |
+| Internet service | Fiber optic customers churn at **~42%** — highest risk segment |
+| Payment method | Electronic check customers churn at **~45%** vs ~16% for automatic payments |
+| Gender | Almost no difference in churn rate — not a useful predictive feature |
 
-### Evaluation Metrics
-| Metric | Why It Matters |
-|--------|----------------|
-| AUC-ROC | Overall discrimination; robust to class imbalance |
-| Precision-Recall | Focus on catching churners without too many false alarms |
-| F1 Score | Balanced recall/precision tradeoff |
-| Log Loss | Calibration of probabilities |
+---
 
-> Accuracy is intentionally *not* the primary metric — a model predicting "no churn" always would hit ~73% accuracy on this dataset, which is misleading.
+## Feature Engineering
 
-### Revenue Risk Score
+7 business-motivated features engineered from EDA insights:
+
+| Feature | Formula | Motivation |
+|---|---|---|
+| `clv_estimate` | MonthlyCharges × tenure | Captures total revenue generated per customer |
+| `services_count` | Sum of 8 service subscriptions | More services = more embedded = lower churn |
+| `charge_per_service` | MonthlyCharges / services_count | High cost per service signals poor perceived value |
+| `is_month_to_month` | Binary flag | 42.7% churn rate — strongest single predictor |
+| `is_electronic_check` | Binary flag | ~45% churn vs ~16% for automatic payment |
+| `no_protection_services` | Binary flag | Customers without security/support churn at ~40% |
+| `tenure_segment` | Binned lifecycle stage | New customers are highest churn risk |
+
+---
+
+## Model Results
+
+| Metric | Logistic Regression | XGBoost |
+|---|---|---|
+| **AUC-ROC** | 0.8411 | **0.8463** |
+| Avg Precision | 0.6281 | **0.6565** |
+| F1 Score | **0.6129** | 0.5736 |
+| Precision | 0.5079 | **0.6632** |
+| Recall | **0.7727** | 0.5053 |
+
+**XGBoost** is the primary production model — higher AUC-ROC and precision means when it flags a customer as at-risk, it's more often correct. Logistic regression serves as the interpretable baseline.
+
+> **Why not accuracy?** A model predicting "no churn" always would achieve 73.5% accuracy — making accuracy a misleading metric for imbalanced classification.
+
+**Top churn drivers (from logistic regression coefficients):**
+- Increases risk: Fiber optic internet, month-to-month contract, high total charges
+- Reduces risk: Long tenure, two-year contracts, tech support, online security
+
+---
+
+## Revenue Risk Score
+
 ```
-Risk Score = Churn Probability × Estimated Customer Lifetime Value (CLV)
+Revenue Risk Score = Churn Probability × Estimated Customer Lifetime Value
 ```
-This ranks customers not just by likelihood to churn, but by *how much it costs the business* if they do.
+
+**Results on 7,043 customers:**
+- Predicted churners: **1,455** (20.7% predicted churn rate)
+- Total revenue at risk: **$803,673**
+- Highest-risk segment: Month-to-month contracts (~$780k of total risk)
 
 ---
 
@@ -149,15 +171,14 @@ This ranks customers not just by likelihood to churn, but by *how much it costs 
 
 ### 1. Clone the repo
 ```bash
-git clone https://github.com/yourusername/customer-churn-analytics.git
+git clone https://github.com/ekane3901/customer-churn-analytics.git
 cd customer-churn-analytics
 ```
 
 ### 2. Create virtual environment
 ```bash
 python -m venv venv
-source venv/bin/activate        # Mac/Linux
-venv\Scripts\activate           # Windows
+source venv/bin/activate
 ```
 
 ### 3. Install dependencies
@@ -165,38 +186,19 @@ venv\Scripts\activate           # Windows
 pip install -r requirements.txt
 ```
 
-### 4. Configure environment variables
+### 4. Download dataset
+Place the Telco CSV from [Kaggle](https://www.kaggle.com/datasets/blastchar/telco-customer-churn) into `data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv`
+
+### 5. Run notebooks in order
 ```bash
-cp .env.example .env
-# Fill in your AWS credentials and RDS connection string
+jupyter notebook
+# 01_eda.ipynb → 02_feature_engineering.ipynb → 03_modeling.ipynb
 ```
 
-### 5. Download dataset
-Place the Telco CSV from Kaggle into `data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv`
-
----
-
-## Running the Project
-
+### 6. Launch dashboard
 ```bash
-# Run EDA notebook
-jupyter notebook notebooks/01_eda.ipynb
-
-# Train models
-python src/models/train.py
-
-# Launch dashboard
 streamlit run src/dashboard/app.py
 ```
-
----
-
-## Key Findings *(updated as project progresses)*
-
-- [ ] Top features driving churn (EDA phase)
-- [ ] Model AUC-ROC scores
-- [ ] Revenue at risk from top 20% predicted churners
-- [ ] Segment with highest churn rate
 
 ---
 
@@ -204,17 +206,17 @@ streamlit run src/dashboard/app.py
 
 | Phase | Status |
 |-------|--------|
-| Data ingestion & EDA | 🔄 In Progress |
-| SQL feature engineering | ⏳ Planned |
-| Model training | ⏳ Planned |
-| Revenue risk scoring | ⏳ Planned |
-| Streamlit dashboard | ⏳ Planned |
-| AWS deployment | ⏳ Planned |
+| Data ingestion & EDA | ✅ Complete |
+| Feature engineering | ✅ Complete |
+| Model training (LR + XGBoost) | ✅ Complete |
+| Revenue risk scoring | ✅ Complete |
+| Streamlit dashboard | ✅ Complete |
+| AWS S3 / RDS deployment | 🔄 In Progress |
 
 ---
 
 ## Author
 
-**Your Name** — [LinkedIn](https://linkedin.com/in/yourprofile) · [GitHub](https://github.com/yourusername)
+**Eric Kane** — [GitHub](https://github.com/ekane3901)
 
-*Built as a portfolio project to demonstrate end-to-end data science skills: SQL, Python, ML modeling, cloud infrastructure, and business analytics.*
+*Built as a portfolio project demonstrating end-to-end data science: SQL, Python, ML modeling, cloud infrastructure, and business analytics.*
