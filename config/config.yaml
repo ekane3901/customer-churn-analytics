@@ -1,0 +1,65 @@
+# config/config.yaml
+# Central configuration for the churn analytics project.
+
+project:
+  name: "Customer Churn & Revenue Risk Analytics"
+  version: "0.1.0"
+
+data:
+  raw_filename: "WA_Fn-UseC_-Telco-Customer-Churn.csv"
+  target_column: "Churn"
+  id_column: "customerID"
+  test_size: 0.2
+  random_state: 42
+
+features:
+  numerical:
+    - tenure
+    - MonthlyCharges
+    - TotalCharges
+  categorical:
+    - gender
+    - Partner
+    - Dependents
+    - PhoneService
+    - MultipleLines
+    - InternetService
+    - OnlineSecurity
+    - OnlineBackup
+    - DeviceProtection
+    - TechSupport
+    - StreamingTV
+    - StreamingMovies
+    - Contract
+    - PaperlessBilling
+    - PaymentMethod
+  engineered:
+    - clv_estimate           # MonthlyCharges * tenure
+    - revenue_risk_score     # churn_prob * clv_estimate
+    - services_count         # total number of add-on services subscribed
+    - is_month_to_month      # binary flag for contract type
+
+models:
+  logistic_regression:
+    max_iter: 1000
+    C: 1.0
+    class_weight: "balanced"  # handles class imbalance
+  xgboost:
+    n_estimators: 300
+    max_depth: 5
+    learning_rate: 0.05
+    subsample: 0.8
+    colsample_bytree: 0.8
+    use_label_encoder: false
+    eval_metric: "logloss"
+    random_state: 42
+
+evaluation:
+  primary_metric: "roc_auc"
+  threshold: 0.5             # probability threshold for binary classification
+
+aws:
+  region: "us-east-1"
+  s3_prefix_raw: "data/raw/"
+  s3_prefix_processed: "data/processed/"
+  s3_prefix_models: "models/"
