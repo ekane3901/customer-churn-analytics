@@ -135,7 +135,7 @@ fig3 = px.scatter(
         "clv_estimate": "Estimated Customer Lifetime Value ($)",
         "revenue_risk_score": "Revenue Risk Score",
     },
-    hover_data=["customer_id", "tenure", "monthly_charges"] if "customer_id" in df_filtered.columns else None,
+    hover_data=["customer_id", "tenure", "MonthlyCharges"] if "customer_id" in df_filtered.columns else None,
 )
 fig3.add_vline(x=risk_threshold, line_dash="dash", line_color="gray", opacity=0.6)
 fig3.update_layout(height=420)
