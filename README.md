@@ -1,5 +1,7 @@
 # Customer Churn & Revenue Risk Analytics Platform
 
+**[Live Dashboard](https://customer-churn-analytics-aefbz7bcwodcxtyfqtzyfj.streamlit.app/)**
+
 > An end-to-end machine learning system to predict customer churn and quantify revenue risk — built with Python, SQL, and AWS.
 
 ![Dashboard Preview](reports/figures/14_revenue_risk_scatter.png)
